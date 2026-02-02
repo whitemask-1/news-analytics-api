@@ -219,11 +219,3 @@ This project was built to demonstrate:
 It reflects how modern backend systems support data pipelines, analytics, and decision-making, not just CRUD.
 
 ⸻
-
-If you want next, I can:
-	•	Rewrite this README shorter for recruiters
-	•	Add a system architecture diagram
-	•	Generate resume bullets directly from this README
-	•	Help you implement bias metrics properly
-
-Just tell me how hard you want to go 🚀

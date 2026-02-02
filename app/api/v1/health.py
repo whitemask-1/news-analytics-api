@@ -11,6 +11,7 @@ class HealthResponse(BaseModel):
 async def health_check(): #Health check endpoint for ALB target group health checks, ALB pings every 30 seconds for a 200 response
     return HealthResponse(
         status="ok", 
-        version="1.0.0"
+        version="1.0.0",
+        service ="news-analytics-api"
     )
 

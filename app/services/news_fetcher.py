@@ -33,8 +33,8 @@ class NewsFetcher: #Service to fetch news articles from external APIs, currently
 
         logger.info("fetching_articles", query=query, limit=limit)
 
-        async with self.client as client:
-            try:
+        try: 
+            async with self.client as client:
                 response = await client.get(url, params=params)
                 response.raise_for_status()
 
@@ -42,13 +42,26 @@ class NewsFetcher: #Service to fetch news articles from external APIs, currently
 
                 #NewsAPI returns {"status": "ok", "totalResults": int, "articles": [...] }
                 if data.get("status") != "ok":
+                    error_msg = data.get("message", "Unknown error")
+                    logger.error("newsapi_error", message=error_msg)
                     raise NewsAPIError(f"NewsAPI error: {data.get('message', 'Unknown error')}")
                 
                 articles = data.get("articles", [])
                 logger.info("fetched_articles", count=len(articles), query=query)
 
                 return articles
-            except httpx.HTTPError as e:
-                logger.error("http_error", error=str(e), url=url)
-                raise NewsAPIError(f"Failed to fetch articles: {str(e)}")
             
+        except httpx.HTTPError as e:
+            logger.error("http_error", error=str(e), url=url)
+            raise NewsAPIError(f"Failed to fetch articles: {str(e)}")
+        
+        except httpx.RequestError as e:
+            logger.error("network_error", error=str(e), url=url)
+            raise NewsAPIError(f"Network error: {str(e)}")
+        
+        except Exception as e:
+            logger.error("unexpected_fetch_error", error=str(e), url=url)
+            raise NewsAPIError(f"Unexpected error: {str(e)}")
+        
+    async def close(self):
+        await self.client.aclose()

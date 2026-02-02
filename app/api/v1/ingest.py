@@ -1,15 +1,20 @@
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
 from typing import Optional
 import structlog  # type: ignore
+from slowapi.util import get_remote_address
+from slowapi import Limiter
 
 from app.models.article import Article
 from app.services.news_fetcher import NewsAPIError, NewsFetcher
 from app.services.normalizer import ArticleNormalizer
+from app.services.newsapi_quota_tracker import newsapi_quota_tracker
+
 
 logger = structlog.get_logger()
 router = APIRouter()  # Create a router instance
 
+limiter = Limiter(key_func=get_remote_address)
 
 class IngestRequest(BaseModel):
     """Request body for ingesting news articles"""
@@ -48,41 +53,50 @@ class IngestResponse(BaseModel):
 
 
 # The ingest endpoint to fetch and normalize articles based on a search query
-@router.post("/ingest", response_model=IngestResponse, tags=["Ingest"])
-async def ingest_articles(request: IngestRequest):
+@router.post("/ingest", response_model=IngestResponse, tags=["Ingestion"])
+@limiter.limit("10/minute") # Rate limit: 10 requests per minute per IP to prevent going over NewsAPI quotas
+async def ingest_articles(body: IngestRequest, request: Request):
+    logger.info("ingest_request_received", query=body.query, limit=body.limit, language=body.language, client_ip=request.client.host)
     fetcher = NewsFetcher()
     normalizer = ArticleNormalizer()
+
+    if not newsapi_quota_tracker.check_and_increment():
+        logger.error("newsapi_quota_exceeded", query=body.query)
+        raise HTTPException(
+            status_code=429,
+            detail=f"Daily NewsAPI quota exceeded. Remaining: {newsapi_quota_tracker.get_remaining()}"
+        )
     
     try:
         raw_articles = await fetcher.fetch_articles(
-            query=request.query,
-            limit=request.limit,
-            language=request.language
+            query=body.query,
+            limit=body.limit,
+            language=body.language
         )
 
         if not raw_articles:
-            logger.warning("no_articles_found", query=request.query)
+            logger.warning("no_articles_found", query=body.query)
             return IngestResponse(
                 status="success",
                 count=0,
                 articles_preview=[],
-                message= f"No articles found for the given query: '{request.query}'"
+                message= f"No articles found for the given query: '{body.query}'"
             )
         
         normalized_articles = normalizer.normalize_batch(
             raw_articles = raw_articles,
             source="newsapi",
-            topic=request.query
+            topic=body.query
         )
 
         if not normalized_articles:
-            logger.error("normalization_failed_all", query=request.query, raw_count=len(raw_articles))
+            logger.error("normalization_failed_all", query=body.query, raw_count=len(raw_articles))
             raise HTTPException(status_code=500, detail="Failed to normalize any articles")
         
         preview = normalized_articles[:5]
 
         logger.info("ingest_success", 
-                    query=request.query, 
+                    query=body.query, 
                     fetched_count=len(raw_articles), 
                     normalized_count=len(normalized_articles))
         
@@ -94,9 +108,9 @@ async def ingest_articles(request: IngestRequest):
         )
         
     except NewsAPIError as e:
-        logger.error("newsapi_error", error=str(e), query=request.query)
+        logger.error("newsapi_error", error=str(e), query=body.query)
         raise HTTPException(status_code=502, detail=f"External API error: {str(e)}")
     
     except Exception as e:
-        logger.error("unexpected_error", error=str(e), query=request.query, error_type=type(e).__name__)
+        logger.error("unexpected_error", error=str(e), query=body.query, error_type=type(e).__name__)
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")

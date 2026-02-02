@@ -7,6 +7,9 @@ pydantic-settings==2.1.0
 # HTTP client for external APIs (async version of requests)
 httpx==0.26.0
 
+#Rate limiting
+slowapi==0.1.9
+
 # Environment variables
 python-dotenv==1.0.0
 

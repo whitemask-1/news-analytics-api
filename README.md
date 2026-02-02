@@ -475,13 +475,13 @@ All logs are in JSON format for easy parsing:
 
 ## 📝 License
 
-[Your License Here]
+MIT License
 
 ---
 
 ## 📧 Contact
 
-[Your Contact Information]
+Email: kevin.williams2218@gmail.com
 
 ---
 

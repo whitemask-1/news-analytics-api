@@ -58,41 +58,6 @@ Data & Analytics
 	•	Parquet (planned optimization)
 	•	Schema normalization for cross-source analysis
 
-⸻
-
-🗂 Repository Structure
-
-news-analytics-api/
-├── app/
-│   ├── main.py              # FastAPI application entry point
-│   ├── api/
-│   │   └── v1/
-│   │       ├── ingest.py    # ingestion endpoints
-│   │       ├── analytics.py # analytics endpoints
-│   │       └── health.py    # health checks
-│   ├── services/
-│   │   ├── news_fetcher.py  # external API clients
-│   │   ├── normalizer.py    # schema normalization
-│   │   ├── s3_client.py    # S3 interactions
-│   │   └── athena.py       # Athena query execution
-│   ├── models/
-│   │   └── article.py      # unified article schema
-│   ├── core/
-│   │   ├── config.py       # environment configuration
-│   │   └── logging.py      # structured logging
-│   └── utils/
-│       └── time.py
-├── docker/
-│   └── Dockerfile
-├── terraform/
-│   ├── ecs.tf
-│   ├── s3.tf
-│   ├── iam.tf
-│   └── variables.tf
-├── requirements.txt
-└── README.md
-
-This structure intentionally mirrors real backend and data-platform repos.
 
 ⸻
 

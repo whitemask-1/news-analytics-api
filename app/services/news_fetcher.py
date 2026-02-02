@@ -1,0 +1,54 @@
+import httpx
+from datetime import datetime
+from typing import Optional
+import structlog
+
+from app.core.config import settings # Import app settings
+
+logger = structlog.get_logger() # Logger for this module
+
+class NewsAPIError(Exception):
+    """Custom exception for News API errors."""
+    pass
+
+class NewsFetcher: #Service to fetch news articles from external APIs, currently supporting NewsAPI.org
+    def __init__(self):
+        self.api_key = settings.news_api_key
+        self.base_url = settings.news_api_base_url
+        self.client = httpx.AsyncClient(timeout=10.0)
+
+    async def fetch_articles(self, query: str, limit: int =10, language: str = "en") -> list[dict]:
+        # Fetch articles from NewsAPI.org based on query, limit, and language
+        # Returns a list of raw article dicts from NewsAPI
+        # Raises NewsAPIError if the API returns an error
+
+        url = f"{self.base_url}/everything"
+        params = {
+            "q": query,
+            "pageSize": min(limit, 100),  # NewsAPI max page size is 100
+            "language": language,
+            "sortBy": "publishedAt",
+            "apiKey": self.api_key
+        }
+
+        logger.info("fetching_articles", query=query, limit=limit)
+
+        async with self.client as client:
+            try:
+                response = await client.get(url, params=params)
+                response.raise_for_status()
+
+                data = response.json()
+
+                #NewsAPI returns {"status": "ok", "totalResults": int, "articles": [...] }
+                if data.get("status") != "ok":
+                    raise NewsAPIError(f"NewsAPI error: {data.get('message', 'Unknown error')}")
+                
+                articles = data.get("articles", [])
+                logger.info("fetched_articles", count=len(articles), query=query)
+
+                return articles
+            except httpx.HTTPError as e:
+                logger.error("http_error", error=str(e), url=url)
+                raise NewsAPIError(f"Failed to fetch articles: {str(e)}")
+            

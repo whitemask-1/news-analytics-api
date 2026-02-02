@@ -1,7 +1,7 @@
 import httpx
 from datetime import datetime
 from typing import Optional
-import structlog
+import structlog # type: ignore
 
 from app.core.config import settings # Import app settings
 

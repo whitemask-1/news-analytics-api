@@ -12,3 +12,12 @@ terraform {
 
   required_version = ">= 1.2.0"
 }
+
+# AWS Provider Configuration
+provider "aws" {
+  region = var.aws_region
+
+  default_tags {
+    tags = var.tags
+  }
+}

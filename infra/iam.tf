@@ -24,12 +24,12 @@
 data "aws_iam_policy_document" "ecs_task_execution_assume_role" {
   # data source: Read-only, doesn't create resources
   # Fetches or generates information
-  
+
   statement {
     actions = ["sts:AssumeRole"]
     # sts = Security Token Service
     # AssumeRole = temporarily become this role
-    
+
     principals {
       type        = "Service"
       identifiers = ["ecs-tasks.amazonaws.com"]
@@ -45,7 +45,7 @@ data "aws_iam_policy_document" "ecs_task_execution_assume_role" {
 
 resource "aws_iam_role" "ecs_task_execution_role" {
   name = "${var.project_name}-${var.environment}-ecs-task-execution-role"
-  
+
   # assume_role_policy: JSON document defining who can use this role
   # Reference the data source we defined above
   assume_role_policy = data.aws_iam_policy_document.ecs_task_execution_assume_role.json
@@ -95,7 +95,7 @@ resource "aws_iam_role_policy_attachment" "ecs_task_execution_role_policy" {
 data "aws_iam_policy_document" "ecs_task_assume_role" {
   statement {
     actions = ["sts:AssumeRole"]
-    
+
     principals {
       type        = "Service"
       identifiers = ["ecs-tasks.amazonaws.com"]
@@ -128,11 +128,11 @@ data "aws_iam_policy_document" "ecs_task_policy" {
   # Statement 1: S3 Access
   # Your app writes news articles to S3
   statement {
-    sid    = "S3Access"
+    sid = "S3Access"
     # sid = Statement ID (for documentation)
     effect = "Allow"
     # Allow or Deny
-    
+
     actions = [
       "s3:PutObject",
       # Upload files to S3
@@ -143,7 +143,7 @@ data "aws_iam_policy_document" "ecs_task_policy" {
       "s3:DeleteObject"
       # Delete files (optional)
     ]
-    
+
     resources = [
       "arn:aws:s3:::${var.project_name}-${var.environment}-*",
       # Bucket ARN pattern
@@ -151,30 +151,30 @@ data "aws_iam_policy_document" "ecs_task_policy" {
       # Objects in bucket (note the /*)
     ]
   }
-  
+
   # Statement 2: CloudWatch Logs
   # Your app writes custom application logs
   statement {
     sid    = "CloudWatchLogs"
     effect = "Allow"
-    
+
     actions = [
       "logs:CreateLogGroup",
       "logs:CreateLogStream",
       "logs:PutLogEvents",
       "logs:DescribeLogStreams"
     ]
-    
+
     resources = ["arn:aws:logs:*:*:*"]
     # All logs (could be more restrictive)
   }
-  
+
   # Statement 3: Athena Access
   # Your app queries news data with Athena
   statement {
     sid    = "AthenaAccess"
     effect = "Allow"
-    
+
     actions = [
       "athena:StartQueryExecution",
       # Run queries
@@ -185,23 +185,23 @@ data "aws_iam_policy_document" "ecs_task_policy" {
       "athena:StopQueryExecution"
       # Cancel queries
     ]
-    
+
     resources = ["*"]
     # Athena requires wildcard for some operations
   }
-  
+
   # Statement 4: Glue Access (for Athena catalog)
   # Athena uses Glue as its metadata catalog
   statement {
     sid    = "GlueAccess"
     effect = "Allow"
-    
+
     actions = [
       "glue:GetDatabase",
       "glue:GetTable",
       "glue:GetPartitions"
     ]
-    
+
     resources = ["*"]
   }
 
@@ -210,12 +210,12 @@ data "aws_iam_policy_document" "ecs_task_policy" {
   statement {
     sid    = "SecretsManagerAccess"
     effect = "Allow"
-    
+
     actions = [
       "secretsmanager:GetSecretValue"
       # Read secret values
     ]
-    
+
     resources = [
       "arn:aws:secretsmanager:${var.aws_region}:*:secret:${var.project_name}/${var.environment}/*"
       # Only secrets matching your project pattern
@@ -230,7 +230,7 @@ data "aws_iam_policy_document" "ecs_task_policy" {
 resource "aws_iam_policy" "ecs_task_policy" {
   name        = "${var.project_name}-${var.environment}-ecs-task-policy"
   description = "Policy for ECS tasks to access required AWS services"
-  
+
   # policy: Convert the policy document to JSON
   policy = data.aws_iam_policy_document.ecs_task_policy.json
 }

@@ -14,12 +14,12 @@ resource "aws_vpc" "main" {
   # - All IPs from 10.0.0.0 to 10.0.255.255 (65,536 addresses)
   # - /16 means first 16 bits are fixed (10.0), last 16 bits are variable
   cidr_block = "10.0.0.0/16"
-  
+
   # enable_dns_hostnames: Assigns DNS names to instances
   # true = instances get names like ec2-xx-xx-xx-xx.compute.amazonaws.com
   # Needed for ECS to resolve container names
   enable_dns_hostnames = true
-  
+
   # enable_dns_support: Enables DNS resolution within VPC
   # true = instances can resolve domain names (like api.newsapi.org)
   enable_dns_support = true
@@ -96,7 +96,7 @@ resource "aws_subnet" "private" {
   # Ternary operator: condition ? true_value : false_value
   # If enable_nat_gateway = false, count = 0 (no private subnets created)
 
-  vpc_id            = aws_vpc.main.id
+  vpc_id = aws_vpc.main.id
   # Start private subnets at 10.0.100.x to avoid overlap with public
   cidr_block        = cidrsubnet(aws_vpc.main.cidr_block, 8, count.index + 100)
   availability_zone = var.availability_zones[count.index]
@@ -157,7 +157,7 @@ resource "aws_route" "public_internet_access" {
   route_table_id         = aws_route_table.public.id
   destination_cidr_block = "0.0.0.0/0"
   # 0.0.0.0/0 = all internet addresses
-  gateway_id             = aws_internet_gateway.main.id
+  gateway_id = aws_internet_gateway.main.id
   # Send to Internet Gateway for direct internet access
 }
 
@@ -285,17 +285,17 @@ resource "aws_security_group" "ecs_tasks" {
 # Provides a stable DNS name even when containers restart
 
 resource "aws_lb" "main" {
-  name               = "${var.project_name}-${var.environment}-alb"
-  internal           = false
+  name     = "${var.project_name}-${var.environment}-alb"
+  internal = false
   # internal = false means internet-facing (public)
   # internal = true means only accessible from within VPC
-  
+
   load_balancer_type = "application"
   # "application" = Layer 7 (HTTP/HTTPS, path-based routing)
   # "network" = Layer 4 (TCP/UDP, ultra high performance)
-  
-  security_groups    = [aws_security_group.alb.id]
-  subnets            = aws_subnet.public[*].id
+
+  security_groups = [aws_security_group.alb.id]
+  subnets         = aws_subnet.public[*].id
   # [*].id = splat operator, gets all IDs from the list
   # ALB must span at least 2 subnets in different AZs
 
@@ -328,17 +328,17 @@ resource "aws_lb_target_group" "app" {
 
   # Health check: How ALB knows if container is healthy
   health_check {
-    enabled             = true
-    healthy_threshold   = 2
+    enabled           = true
+    healthy_threshold = 2
     # healthy_threshold = 2: need 2 successful checks to mark healthy
-    interval            = 30
+    interval = 30
     # Check every 30 seconds
-    matcher             = "200"
+    matcher = "200"
     # HTTP 200 = success
-    path                = "/api/v1/health"
+    path = "/api/v1/health"
     # Your FastAPI health endpoint
-    protocol            = "HTTP"
-    timeout             = 5
+    protocol = "HTTP"
+    timeout  = 5
     # Wait 5 seconds for response
     unhealthy_threshold = 2
     # 2 failed checks = mark unhealthy (stop sending traffic)

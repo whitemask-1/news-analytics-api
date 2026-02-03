@@ -17,7 +17,7 @@ resource "aws_ecr_repository" "app" {
   # String interpolation: "${var.x}-${var.y}" combines variables
   name = "${var.project_name}-${var.environment}"
   # Result: "news-analytics-dev"
-  
+
   # image_tag_mutability: Can you overwrite a tag?
   # MUTABLE = yes (can push over "latest" tag multiple times)
   # IMMUTABLE = no (each push needs a unique tag like v1.0.1, v1.0.2)
@@ -44,7 +44,7 @@ resource "aws_ecr_repository" "app" {
   # tags: Metadata for organization and cost tracking
   # merge() combines two maps into one
   tags = merge(
-    var.tags,  # Global tags from variables.tf
+    var.tags, # Global tags from variables.tf
     {
       Name = "${var.project_name}-${var.environment}-ecr"
       # Additional specific tags for this resource
@@ -74,7 +74,7 @@ resource "aws_ecr_lifecycle_policy" "app" {
         description  = "Keep last 5 images"
         selection = {
           # tagStatus: untagged or tagged or any
-          tagStatus   = "any"
+          tagStatus = "any"
           # countType: imageCountMoreThan keeps N most recent
           countType   = "imageCountMoreThan"
           countNumber = 5
@@ -86,7 +86,7 @@ resource "aws_ecr_lifecycle_policy" "app" {
       }
     ]
   })
-  
+
   # Why this matters:
   # - Every Docker push creates a new image (uses storage)
   # - Old images you don't need cost money

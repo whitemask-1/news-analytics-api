@@ -390,9 +390,9 @@ s3://news-analytics-data/
 - ✅ Input validation with Pydantic
 - ✅ Non-root Docker user
 - 🚧 AWS Secrets Manager for production credentials
-- 🚧 HTTPS/TLS via Application Load Balancer
-- 🚧 VPC security groups for network isolation
-- 🚧 IAM roles with least-privilege access
+- ✅ HTTPS/TLS via Application Load Balancer
+- ✅ VPC security groups for network isolation
+- ✅ IAM roles with least-privilege access
 
 ---
 

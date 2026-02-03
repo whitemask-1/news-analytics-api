@@ -440,8 +440,8 @@ All logs are in JSON format for easy parsing:
 - [x] Test suite
 
 ### Phase 2: Infrastructure 🚧 (In Progress)
-- [ ] Dockerfile
-- [ ] Docker Compose
+- [x] Dockerfile
+- [x] Docker Compose
 - [ ] AWS ECR setup
 - [ ] Terraform for ECS
 - [ ] Load balancer configuration

@@ -1,0 +1,48 @@
+version: '3.8'
+
+services:
+  # Main API service
+  api:
+    # Build the image from the Dockerfile in the current directory
+    build:
+      context: .
+      dockerfile: Dockerfile
+    
+    # Container name for easy reference
+    container_name: news-analytics-api
+    
+    # Map port 8000 in the container to port 8000 on your host machine
+    # Format: "host_port:container_port"
+    ports:
+      - "8000:8000"
+    
+    # Mount your local code directory into the container
+    # This enables hot-reloading during development
+    volumes:
+      - ./app:/app/app
+      - ./requirements.txt:/app/requirements.txt
+    
+    # Load environment variables from .env file
+    env_file:
+      - .env
+    
+    # Restart policy: always restart unless explicitly stopped
+    restart: unless-stopped
+    
+    # Override the default command for development with hot-reload
+    # Remove this in production
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    
+    # Health check to ensure the container is running properly
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+# Optional: Define a network for your services
+# Useful when you add more services (like a database)
+networks:
+  default:
+    name: news-analytics-network

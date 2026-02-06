@@ -57,7 +57,8 @@ class ArticleNormalizer:
             
             # Create normalized article
             article = Article(
-                source=source_name.lower().replace(" ", ""),
+                source="newsapi",
+                source_name=source_name,
                 title=title,
                 description=description,
                 url=url,

@@ -123,7 +123,7 @@ async def process_single_message(message_body: Dict[str, Any]) -> Dict[str, Any]
         
         raw_response = await news_fetcher.fetch_articles(
             query=query,
-            page_size=limit,
+            limit=limit,
             language=language
         )
         
@@ -158,7 +158,7 @@ async def process_single_message(message_body: Dict[str, Any]) -> Dict[str, Any]
             import hashlib
             title = article.get("title", "")
             url = article.get("url", "")
-            hash_input = f"{url}:{title}"
+            hash_input = f"{title.lower().strip()}|{str(url)}"
             article_hash = hashlib.sha256(hash_input.encode()).hexdigest()[:16]
             article_hashes.append(article_hash)
         
@@ -213,13 +213,11 @@ async def process_single_message(message_body: Dict[str, Any]) -> Dict[str, Any]
         # Step 5: Normalize only new articles
         logger.info("normalizing_new_articles", count=new_count)
         
-        # Create modified response with only new articles
-        filtered_response = {
-            **raw_response,
-            "articles": new_articles
-        }
-        
-        normalized_articles = normalizer.normalize_batch(filtered_response)
+        normalized_models = normalizer.normalize_batch(new_articles, topic=query)
+        normalized_articles = [a.model_dump() for a in normalized_models]
+        for a in normalized_articles:
+            if a.get("url"):
+                a["url"] = str(a["url"])
         normalized_count = len(normalized_articles)
         
         logger.info(
@@ -228,10 +226,6 @@ async def process_single_message(message_body: Dict[str, Any]) -> Dict[str, Any]
             output_count=normalized_count,
             filtered=new_count - normalized_count
         )
-        
-        # Add topic field (search query) to normalized articles
-        for article in normalized_articles:
-            article["topic"] = query
         
         # Step 6: Store raw articles to S3 (for debugging)
         logger.info("storing_raw_articles", count=total_fetched)

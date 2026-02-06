@@ -17,7 +17,7 @@ class NewsFetcher: #Service to fetch news articles from external APIs, currently
         self.base_url = settings.news_api_base_url
         self.client = httpx.AsyncClient(timeout=10.0)
 
-    async def fetch_articles(self, query: str, limit: int =10, language: str = "en") -> list[dict]:
+    async def fetch_articles(self, query: str, limit: int =10, language: str = "en") -> dict:
         # Fetch articles from NewsAPI.org based on query, limit, and language
         # Returns a list of raw article dicts from NewsAPI
         # Raises NewsAPIError if the API returns an error
@@ -34,26 +34,25 @@ class NewsFetcher: #Service to fetch news articles from external APIs, currently
         logger.info("fetching_articles", query=query, limit=limit)
 
         try: 
-            async with self.client as client:
-                response = await client.get(url, params=params)
-                response.raise_for_status()
+            response = await self.client.get(url, params=params)
+            response.raise_for_status()
 
-                data = response.json()
+            data = response.json()
 
-                #NewsAPI returns {"status": "ok", "totalResults": int, "articles": [...] }
-                if data.get("status") != "ok":
-                    error_msg = data.get("message", "Unknown error")
-                    logger.error("newsapi_error", message=error_msg)
-                    raise NewsAPIError(f"NewsAPI error: {data.get('message', 'Unknown error')}")
-                
-                articles = data.get("articles", [])
-                logger.info("fetched_articles", count=len(articles), query=query)
-
-                return articles
+            #NewsAPI returns {"status": "ok", "totalResults": int, "articles": [...] }
+            if data.get("status") != "ok":
+                error_msg = data.get("message", "Unknown error")
+                logger.error("newsapi_error", message=error_msg)
+                raise NewsAPIError(f"NewsAPI error: {data.get('message', 'Unknown error')}")
             
-        except httpx.HTTPError as e:
-            logger.error("http_error", error=str(e), url=url)
-            raise NewsAPIError(f"Failed to fetch articles: {str(e)}")
+            articles = data.get("articles", [])
+            logger.info("fetched_articles", count=len(articles), query=query)
+
+            return data
+            
+        except httpx.HTTPStatusError as e:
+            logger.error("http_status_error", error=str(e), url=url, status_code=e.response.status_code)
+            raise NewsAPIError(f"HTTP {e.response.status_code} error: {str(e)}")
         
         except httpx.RequestError as e:
             logger.error("network_error", error=str(e), url=url)

@@ -31,7 +31,7 @@ services:
     
     # Override the default command for development with hot-reload
     # Remove this in production
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    command: uvicorn app.lambda_api_handler:app --host 0.0.0.0 --port 8000 --reload
     
     # Health check to ensure the container is running properly
     healthcheck:

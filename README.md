@@ -206,10 +206,10 @@ Operational:
 
 1. **Dockerfile**: `python:3.11-slim` → `public.ecr.aws/lambda/python:3.11`
 2. **Server**: Removed `uvicorn` → Added `mangum` (FastAPI → Lambda adapter)
-3. **Split handlers**: `main.py` → `lambda_api_handler.py` + `lambda_worker_handler.py`
+3. **Split handlers**: Created `lambda_api_handler.py` + `lambda_worker_handler.py`
 4. **Rate limiting**: `slowapi` → API Gateway native (simpler)
 5. **Quota tracking**: In-memory → DynamoDB planned (currently disabled)
-6. **Infrastructure**: `ecs.tf` → `lambda.tf` + `sqs.tf` + API Gateway
+6. **Infrastructure**: Migrated to `lambda.tf` + `sqs.tf` + API Gateway
 
 ---
 
@@ -574,16 +574,14 @@ terraform apply -target=aws_lambda_function.worker
 news-analytics-api/
 ├── app/
 │   ├── __init__.py
-│   ├── main.py                     # Original FastAPI app (deprecated)
-│   ├── lambda_api_handler.py       # Lambda API handler (NEW)
-│   ├── lambda_worker_handler.py    # Lambda worker handler (NEW)
+│   ├── lambda_api_handler.py       # Lambda API handler
+│   ├── lambda_worker_handler.py    # Lambda worker handler
 │   ├── api/
 │   │   ├── __init__.py
 │   │   └── v1/
 │   │       ├── __init__.py
 │   │       ├── health.py           # Health check endpoint
-│   │       ├── ingest.py           # Ingest endpoint (deprecated)
-│   │       └── analytics.py        # Analytics endpoints (NEW)
+│   │       └── analytics.py        # Analytics endpoints
 │   ├── core/
 │   │   ├── __init__.py
 │   │   ├── config.py               # Configuration management
@@ -595,20 +593,19 @@ news-analytics-api/
 │       ├── __init__.py
 │       ├── news_fetcher.py         # NewsAPI client
 │       ├── normalizer.py           # Article normalization
-│       ├── redis_client.py         # Redis deduplication (NEW)
-│       ├── s3_client.py            # S3 storage (NEW)
-│       └── athena.py               # Athena queries (NEW)
+│       ├── redis_client.py         # Redis deduplication
+│       ├── s3_client.py            # S3 storage
+│       └── athena.py               # Athena queries
 ├── infra/
 │   ├── main.tf                     # Main Terraform config
 │   ├── variables.tf                # Input variables
 │   ├── outputs.tf                  # Output values
-│   ├── lambda.tf                   # Lambda, API Gateway, SQS (NEW)
-│   ├── s3.tf                       # S3 buckets (NEW)
-│   ├── athena.tf                   # Glue, Athena (NEW)
+│   ├── lambda.tf                   # Lambda, API Gateway, SQS
+│   ├── s3.tf                       # S3 buckets
+│   ├── athena.tf                   # Glue, Athena
+│   ├── secrets.tf                  # AWS Secrets Manager
 │   ├── iam.tf                      # IAM roles
-│   ├── ecr.tf                      # Container registry
-│   ├── ecs.tf                      # ECS resources (DEPRECATED)
-│   └── network.tf                  # VPC, subnets (DEPRECATED for Lambda)
+│   └── ecr.tf                      # Container registry
 ├── .env.example                    # Environment template
 ├── .gitignore
 ├── Dockerfile                      # Lambda container image (UPDATED)
@@ -828,39 +825,156 @@ WHERE year = 2026
 
 ---
 
-## 🚀 Future Enhancements
+## 🚀 Future Features & Enhancements
 
-### Phase 1: Reliability (Next Sprint)
+### Phase 1: Reliability & Observability (Q2 2026)
 
-- [ ] DynamoDB quota tracker (replace in-memory)
-- [ ] SNS notifications for DLQ alarms
-- [ ] CloudWatch dashboard with key metrics
-- [ ] Automated testing (pytest + moto for AWS)
-- [ ] GitHub Actions CI/CD pipeline
+**Monitoring & Alerting**
+- [ ] CloudWatch dashboard with key metrics (Lambda invocations, errors, latency, SQS depth)
+- [ ] SNS notifications for critical alarms (DLQ messages, high error rates, quota exceeded)
+- [ ] X-Ray tracing for distributed request tracking
+- [ ] Custom CloudWatch metrics for business KPIs (articles processed, deduplication rate)
+- [ ] Structured log aggregation with CloudWatch Logs Insights queries
 
-### Phase 2: Features
+**State Management**
+- [ ] DynamoDB table for NewsAPI quota tracking (persistent across Lambda invocations)
+- [ ] DynamoDB table for ingestion job status and history
+- [ ] S3 event notifications for automated Athena catalog updates
+- [ ] State machine with Step Functions for complex workflows
 
-- [ ] Multiple NewsAPI queries per run (tech, business, sports)
-- [ ] Support for additional news sources (Guardian API, NYTimes)
-- [ ] Real-time WebSocket for ingestion status
-- [ ] Athena query result caching with Redis
-- [ ] Data export (CSV, Excel) from analytics API
+**Testing & CI/CD**
+- [ ] Comprehensive pytest test suite with moto for AWS service mocking
+- [ ] Integration tests for end-to-end workflows
+- [ ] GitHub Actions pipeline for automated testing and deployment
+- [ ] Blue-green deployments with Lambda aliases and versions
+- [ ] Automated rollback on deployment failures
 
-### Phase 3: Advanced Analytics
+### Phase 2: Feature Expansion (Q3 2026)
 
-- [ ] Sentiment analysis with ML model
-- [ ] Named Entity Recognition (extract people, places)
-- [ ] Topic clustering (LDA, K-means)
-- [ ] Time-series forecasting (trending predictions)
-- [ ] Interactive dashboard (React + Chart.js)
+**Multi-Source Data Ingestion**
+- [ ] Guardian API integration (additional news source)
+- [ ] New York Times API support
+- [ ] Reddit posts from news subreddits
+- [ ] RSS feed aggregation for smaller publishers
+- [ ] Custom web scraping for specific sources
+- [ ] Unified article schema across all sources
 
-### Phase 4: Enterprise
+**Query Enhancement**
+- [ ] Multiple query topics per ingestion run (tech, business, sports, politics)
+- [ ] Smart query generation based on trending topics
+- [ ] Query templates library (pre-configured topic sets)
+- [ ] Dynamic query scheduling based on topic popularity
+- [ ] Query result preview before full ingestion
 
-- [ ] Multi-tenancy (separate data per customer)
-- [ ] API authentication (JWT, API keys)
-- [ ] Usage-based billing integration
-- [ ] SLA monitoring and reporting
-- [ ] Data retention policies (GDPR compliance)
+**Real-time Features**
+- [ ] WebSocket API for live ingestion progress updates
+- [ ] Server-Sent Events (SSE) for real-time analytics
+- [ ] Streaming analytics with Kinesis Data Analytics
+- [ ] Real-time duplicate detection statistics
+
+**Data Export & Integration**
+- [ ] CSV/Excel export from analytics endpoints
+- [ ] JSON API for raw article access
+- [ ] Webhook support for article ingestion events
+- [ ] Zapier/Make.com integration for workflow automation
+- [ ] S3 Select for efficient filtered exports
+
+### Phase 3: Advanced Analytics & AI (Q4 2026)
+
+**Natural Language Processing**
+- [ ] Sentiment analysis using Hugging Face transformers
+- [ ] Named Entity Recognition (people, organizations, locations)
+- [ ] Topic modeling with LDA (Latent Dirichlet Allocation)
+- [ ] Keyword extraction and importance ranking
+- [ ] Language detection for multilingual articles
+- [ ] Text summarization for long articles
+
+**Machine Learning Models**
+- [ ] Article category classification (tech, business, sports, etc.)
+- [ ] Fake news detection with ML classifier
+- [ ] Bias detection in article language
+- [ ] Related article recommendations
+- [ ] Duplicate detection with semantic similarity (not just hash-based)
+
+**Predictive Analytics**
+- [ ] Time-series forecasting for trending topics
+- [ ] Anomaly detection in article volume/patterns
+- [ ] Trend prediction based on historical data
+- [ ] Source reliability scoring
+- [ ] Viral content prediction
+
+**Interactive Visualization**
+- [ ] React dashboard with Chart.js/D3.js
+- [ ] Geographic heat maps for article origins
+- [ ] Network graphs for topic relationships
+- [ ] Time-series charts for trending analysis
+- [ ] Word clouds for popular terms
+- [ ] Interactive filters and drill-downs
+
+### Phase 4: Enterprise & Scale (2027)
+
+**Multi-tenancy & Authentication**
+- [ ] API key management system
+- [ ] JWT-based authentication
+- [ ] OAuth2/OIDC integration (Google, GitHub)
+- [ ] Per-tenant data isolation in S3 (separate prefixes)
+- [ ] Per-tenant Athena workgroups
+- [ ] Role-based access control (RBAC)
+
+**Performance Optimization**
+- [ ] Lambda provisioned concurrency for zero cold starts
+- [ ] Redis caching for frequently accessed analytics
+- [ ] Athena query result caching (24-hour TTL)
+- [ ] S3 intelligent tiering for cost optimization
+- [ ] Parquet file compaction for better query performance
+- [ ] Partition optimization based on access patterns
+
+**Cost Management**
+- [ ] Usage-based billing integration with Stripe
+- [ ] Cost allocation tags for multi-tenant tracking
+- [ ] Budget alerts and spending limits per tenant
+- [ ] Reserved capacity planning recommendations
+- [ ] Cost optimization reports
+
+**Compliance & Security**
+- [ ] GDPR compliance features (data deletion, export)
+- [ ] Data retention policies with automated cleanup
+- [ ] Audit logging for all data access
+- [ ] Encryption at rest for all S3 buckets (SSE-KMS)
+- [ ] VPC endpoints for private AWS service access
+- [ ] WAF rules for API Gateway protection
+- [ ] DDoS protection with Shield
+
+**Operational Excellence**
+- [ ] SLA monitoring and reporting dashboard
+- [ ] Multi-region deployment for high availability
+- [ ] Disaster recovery with automated backups
+- [ ] Capacity planning and autoscaling optimization
+- [ ] Custom CloudFormation/CDK templates for easy deployment
+- [ ] Infrastructure cost calculator tool
+
+### Phase 5: Innovation & Experiments (Beyond 2027)
+
+**Emerging Technologies**
+- [ ] Integration with LLMs (GPT-4, Claude) for article analysis
+- [ ] Voice-enabled analytics queries (Alexa, Google Assistant)
+- [ ] Blockchain-based article verification
+- [ ] Graph database (Neptune) for relationship analysis
+- [ ] Quantum computing experiments for pattern detection
+
+**New Data Sources**
+- [ ] Podcast transcription and analysis
+- [ ] Video news content with transcript extraction
+- [ ] Social media sentiment integration (Twitter, LinkedIn)
+- [ ] Financial market correlation with news events
+- [ ] Government press releases and official statements
+
+**Advanced Use Cases**
+- [ ] Automated newsletter generation
+- [ ] News aggregation mobile app
+- [ ] Chrome extension for article tracking
+- [ ] Slack/Teams bot for news updates
+- [ ] Email alerts for breaking news in specific topics
 
 ---
 
@@ -1063,11 +1177,12 @@ curl -X POST "http://localhost:8000/api/v1/ingest" \
 news-analytics-api/
 ├── app/
 │   ├── __init__.py
-│   ├── main.py                      # FastAPI application
+│   ├── lambda_api_handler.py        # Lambda API handler
+│   ├── lambda_worker_handler.py     # Lambda worker handler
 │   ├── api/
 │   │   └── v1/
 │   │       ├── health.py            # Health check endpoint
-│   │       └── ingest.py            # Article ingestion endpoint
+│   │       └── analytics.py         # Analytics endpoints
 │   ├── core/
 │   │   ├── config.py                # Configuration management
 │   │   └── logging.py               # Logging setup
@@ -1077,8 +1192,9 @@ news-analytics-api/
 │   │   ├── news_fetcher.py          # NewsAPI client
 │   │   ├── normalizer.py            # Data normalization
 │   │   ├── newsapi_quota_tracker.py # Quota management
-│   │   ├── s3_client.py             # S3 storage (planned)
-│   │   └── athena.py                # Athena queries (planned)
+│   │   ├── redis_client.py          # Redis deduplication
+│   │   ├── s3_client.py             # S3 storage
+│   │   └── athena.py                # Athena queries
 │   └── utils/
 │       └── time.py                  # Date/time utilities
 ├── api-testing/
@@ -1086,9 +1202,12 @@ news-analytics-api/
 │   ├── test_rate_limit.py           # Rate limiting tests
 │   └── testing_suite.py             # Comprehensive test suite
 ├── infra/
-│   ├── ecs.tf                       # ECS cluster & services
+│   ├── lambda.tf                    # Lambda functions, API Gateway, SQS
 │   ├── iam.tf                       # IAM roles & policies
 │   ├── s3.tf                        # S3 buckets
+│   ├── athena.tf                    # Glue database & Athena
+│   ├── ecr.tf                       # Container registry
+│   ├── secrets.tf                   # AWS Secrets Manager
 │   └── variables.tf                 # Terraform variables
 ├── docker/
 │   └── (Docker-related files)
@@ -1169,13 +1288,15 @@ terraform output
 
 ### Infrastructure Components
 
-- **ECR**: Docker image repository
-- **VPC**: Network isolation with public/private subnets
-- **ALB**: Application Load Balancer with health checks
-- **ECS Fargate**: Serverless container orchestration
+- **Lambda**: Serverless compute for API and worker functions
+- **API Gateway**: HTTP API endpoint with rate limiting
+- **SQS**: Message queue for async article processing
+- **ECR**: Docker container image repository
+- **S3**: Article storage (raw JSON + normalized Parquet)
+- **Athena**: SQL-based analytics on S3 data lake
+- **Glue Catalog**: Table metadata for Athena
 - **CloudWatch**: Centralized logging and monitoring
-- **S3**: Article storage (JSON format)
-- **Athena**: SQL-based analytics
+- **EventBridge**: Scheduled ingestion triggers
 - **Secrets Manager**: Secure credential storage
 - **IAM**: Least-privilege access roles
 
@@ -1256,37 +1377,42 @@ All logs are in JSON format for easy parsing:
 
 ---
 
-## 🛣️ Roadmap
+## 🛣️ Project Roadmap
 
-### Phase 1: API ✅ (Complete)
+### Phase 1: Core API ✅ (Complete)
 - [x] NewsAPI integration
-- [x] Data normalization
+- [x] Data normalization with Pydantic
 - [x] Rate limiting
 - [x] Quota tracking
 - [x] Health checks
-- [x] Test suite
+- [x] Comprehensive test suite
 
-### Phase 2: Infrastructure ✅ (Complete)
-- [x] Dockerfile
-- [x] Docker Compose
-- [x] AWS ECR setup
-- [x] Terraform for ECS
-- [x] Load balancer configuration
-- [x] CloudWatch integration
+### Phase 2: Lambda Migration ✅ (Complete)
+- [x] Lambda container image creation
+- [x] API Gateway HTTP API setup
+- [x] SQS queue for async processing
+- [x] Split handlers (API + Worker)
+- [x] EventBridge scheduled triggers
+- [x] Terraform infrastructure as code
 
-### Phase 3: Data Pipeline 🚧 (In Progress)
-- [ ] S3 storage implementation
-- [ ] Athena table creation
-- [ ] Partition management
-- [ ] Analytics endpoints
-- [ ] Query optimization
+### Phase 3: Data Pipeline ✅ (Complete)
+- [x] S3 storage implementation (raw + normalized)
+- [x] Redis deduplication with Upstash
+- [x] Athena table creation with Glue
+- [x] Partition management (year/month/day)
+- [x] Analytics endpoints (counts, trending, sources)
+- [x] Parquet format for efficient querying
 
-### Phase 4: Analytics 📋 (Planned)
-- [ ] Sentiment analysis integration
-- [ ] Trend detection algorithms
-- [ ] Visualization dashboards
-- [ ] Real-time alerts
-- [ ] Historical data analysis
+### Phase 4: Optimization & Monitoring 🚧 (In Progress)
+- [x] CloudWatch Logs integration
+- [x] DLQ for failed messages
+- [ ] CloudWatch dashboard
+- [ ] SNS alarms for critical errors
+- [ ] DynamoDB for quota persistence
+- [ ] X-Ray distributed tracing
+
+### Phase 5: Advanced Features 📋 (Planned)
+- See "Future Features & Enhancements" section above for detailed roadmap
 
 ---
 

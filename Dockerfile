@@ -1,36 +1,89 @@
-# Use an official Python runtime as a parent image
-# Python 3.11-slim is a lightweight version that's perfect for production
-FROM python:3.11-slim
+# =============================================================================
+# LAMBDA CONTAINER IMAGE FOR NEWS ANALYTICS API
+# =============================================================================
+# This Dockerfile creates a Lambda-compatible container image.
+# Uses AWS Lambda Python base image instead of standard Python image.
+#
+# Key Differences from ECS Dockerfile:
+# - Base image: AWS Lambda Python runtime (includes Lambda runtime interface)
+# - No uvicorn: Lambda runtime handles HTTP → event conversion
+# - CMD: Points to Lambda handler function (not uvicorn server)
+# - Multi-handler: Same image serves both API and Worker Lambdas
+#
+# Image Size: ~200-300MB (includes Lambda runtime + dependencies)
+# Cold Start: ~1-2 seconds for first invocation
 
-# Set the working directory in the container
-# All subsequent commands will run from this directory
-WORKDIR /app
+# Use AWS Lambda Python 3.11 base image
+# This image includes:
+# - Python 3.11 runtime
+# - Lambda Runtime Interface Client (RIC)
+# - AWS SDK (boto3)
+# - Optimized for Lambda execution
+FROM public.ecr.aws/lambda/python:3.11
 
 # Set environment variables
-# PYTHONUNBUFFERED: Ensures Python output is sent straight to terminal (useful for logs)
-# PYTHONDONTWRITEBYTECODE: Prevents Python from writing .pyc files to disk
+# PYTHONUNBUFFERED: Send output directly to CloudWatch logs
+# PYTHONDONTWRITEBYTECODE: Skip .pyc files (not needed in Lambda)
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1
 
 # Copy requirements first for better Docker layer caching
-# Docker caches layers, so if requirements don't change, this layer is reused
-COPY requirements.txt .
+# Docker caches layers - if requirements unchanged, this layer reused
+COPY requirements.txt ${LAMBDA_TASK_ROOT}/
 
-# Install Python dependencies
-RUN pip install --no-cache-dir -r requirements.txt
+# Install Python dependencies into Lambda task root
+# Lambda looks for packages in ${LAMBDA_TASK_ROOT}
+RUN pip install --no-cache-dir -r ${LAMBDA_TASK_ROOT}/requirements.txt
 
-# Copy the application code into the container
-# We do this AFTER installing dependencies so that code changes don't invalidate the dependency layer
-COPY ./app ./app
+# Copy application code into Lambda task root
+# This makes 'app' module importable
+COPY ./app ${LAMBDA_TASK_ROOT}/app
 
-# Expose the port the app runs on
-# This documents which port the container listens on at runtime
-EXPOSE 8000
+# Default CMD: API handler (can be overridden in Lambda configuration)
+# API Gateway invokes: app.lambda_api_handler.handler
+# For worker Lambda, Terraform overrides to: app.lambda_worker_handler.handler
+#
+# Lambda handler format: module.function
+# - module: Python file path (dots for directories)
+# - function: Function name in that file
+CMD ["app.lambda_api_handler.handler"]
 
-# Command to run the application
-# uvicorn is the ASGI server that runs FastAPI
-# --host 0.0.0.0 makes the server accessible outside the container
-# --port 8000 specifies the port
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# =============================================================================
+# BUILD INSTRUCTIONS
+# =============================================================================
+# 
+# Build and push to ECR:
+# 
+# 1. Authenticate with ECR:
+#    aws ecr get-login-password --region us-east-1 | \
+#      docker login --username AWS --password-stdin <account>.dkr.ecr.us-east-1.amazonaws.com
+# 
+# 2. Build image:
+#    docker build -t news-analytics-api:lambda .
+# 
+# 3. Tag for ECR:
+#    docker tag news-analytics-api:lambda \
+#      <account>.dkr.ecr.us-east-1.amazonaws.com/news-analytics-dev:latest
+# 
+# 4. Push to ECR:
+#    docker push <account>.dkr.ecr.us-east-1.amazonaws.com/news-analytics-dev:latest
+# 
+# 5. Lambda automatically pulls latest image on next invocation
+# 
+# =============================================================================
+# LOCAL TESTING
+# =============================================================================
+# 
+# Test API handler locally:
+#   docker run -p 9000:8080 news-analytics-api:lambda
+# 
+# Send test event:
+#   curl -XPOST "http://localhost:9000/2015-03-31/functions/function/invocations" \
+#     -d '{"rawPath": "/health", "requestContext": {"http": {"method": "GET"}}}'
+# 
+# Test worker handler:
+#   docker run news-analytics-api:lambda app.lambda_worker_handler.handler
+#
+

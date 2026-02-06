@@ -123,6 +123,39 @@ variable "enable_container_insights" {
 }
 
 # =============================================================================
+# LAMBDA & API CONFIGURATION
+# =============================================================================
+
+variable "news_api_base_url" {
+  description = "Base URL for NewsAPI"
+  type        = string
+  default     = "https://newsapi.org/v2"
+}
+
+variable "news_api_key" {
+  description = "API key for NewsAPI (should be moved to Secrets Manager in production)"
+  type        = string
+  sensitive   = true
+  # Set via environment variable: TF_VAR_news_api_key=your_key_here
+  # Or pass via -var flag: terraform apply -var="news_api_key=your_key"
+}
+
+variable "upstash_redis_url" {
+  description = "Upstash Redis REST API URL"
+  type        = string
+  sensitive   = true
+  # Get from Upstash console after creating database
+  # Format: https://your-db.upstash.io
+}
+
+variable "upstash_redis_token" {
+  description = "Upstash Redis REST API token"
+  type        = string
+  sensitive   = true
+  # Get from Upstash console - authentication token for REST API
+}
+
+# =============================================================================
 # TAGS
 # =============================================================================
 # Tags help organize and track costs in AWS

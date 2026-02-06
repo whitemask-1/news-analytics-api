@@ -1,23 +1,104 @@
-# Core API
+# =============================================================================
+# CORE API DEPENDENCIES
+# =============================================================================
+
+# FastAPI: Modern web framework for building APIs
 fastapi==0.109.0
-uvicorn[standard]==0.27.0
-pydantic==2.5.3
+
+# Pydantic: Data validation and settings management
+# Using versions with pre-built wheels to avoid Rust compilation
+pydantic==2.6.1
 pydantic-settings==2.1.0
 
-# HTTP client for external APIs (async version of requests)
+# =============================================================================
+# LAMBDA ADAPTER
+# =============================================================================
+
+# Mangum: Adapter to run ASGI applications (FastAPI) in AWS Lambda
+# Converts API Gateway events to ASGI format
+mangum==0.17.0
+
+# =============================================================================
+# HTTP CLIENT
+# =============================================================================
+
+# httpx: Async HTTP client for external API calls (NewsAPI)
+# Modern replacement for requests with async support
 httpx==0.26.0
 
-#Rate limiting
-slowapi==0.1.9
+# =============================================================================
+# AWS SDK
+# =============================================================================
 
-# Environment variables
-python-dotenv==1.0.0
-
-# Date/time handling
-python-dateutil==2.8.2
-
-# AWS SDK (for S3 later)
+# boto3: AWS SDK for Python (S3, Athena, SQS, Secrets Manager)
 boto3==1.34.34
 
-# Logging
+# =============================================================================
+# DATA PROCESSING
+# =============================================================================
+
+# pyarrow: Apache Arrow for Parquet file format
+# Used for efficient columnar storage (2-3x smaller than JSON)
+# Using latest version with better wheel support
+pyarrow==15.0.2
+
+# =============================================================================
+# REDIS CLIENT
+# =============================================================================
+
+# No redis package needed - using Upstash REST API via httpx
+# Upstash provides HTTP interface, no TCP connection required
+# This avoids VPC complexity in Lambda
+
+# =============================================================================
+# DATE/TIME HANDLING
+# =============================================================================
+
+# python-dateutil: Powerful extensions to the standard datetime module
+python-dateutil==2.8.2
+
+# =============================================================================
+# ENVIRONMENT VARIABLES
+# =============================================================================
+
+# python-dotenv: Read environment variables from .env file
+# Useful for local development
+python-dotenv==1.0.0
+
+# =============================================================================
+# LOGGING
+# =============================================================================
+
+# structlog: Structured logging for better log parsing and analysis
+# Outputs JSON logs that integrate well with CloudWatch
 structlog==24.1.0
+
+# =============================================================================
+# REMOVED DEPENDENCIES (from ECS version)
+# =============================================================================
+
+# uvicorn: NOT NEEDED - Lambda runtime replaces uvicorn
+# slowapi: NOT NEEDED - API Gateway handles rate limiting
+#
+# These were used in ECS Fargate but are redundant in Lambda:
+# - Lambda has no always-on server (no uvicorn needed)
+# - API Gateway provides native rate limiting (better than slowapi)
+# - Cold starts naturally limit abuse (unlike always-on containers)
+
+# =============================================================================
+# DEPENDENCY NOTES
+# =============================================================================
+
+# Total dependencies: ~15 packages (down from 18 in ECS version)
+# Image size: ~200-300MB (Lambda base + dependencies)
+# Cold start impact: Minimal - most time is Lambda initialization
+#
+# Optimization opportunities:
+# - Remove unused boto3 services (reduces import time)
+# - Use Lambda layers for heavy dependencies (pyarrow)
+# - Pin versions for reproducible builds
+#
+# Security:
+# - Regularly update dependencies (security patches)
+# - Use pip-audit to check for vulnerabilities
+# - AWS Lambda base images are maintained by AWS

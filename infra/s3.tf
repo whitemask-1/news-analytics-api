@@ -18,7 +18,7 @@ resource "aws_s3_bucket" "raw_articles" {
 
   tags = merge(var.tags, {
     Name        = "${var.project_name}-${var.environment}-raw-articles"
-    Description = "Raw JSON articles from NewsAPI (temporary storage)"
+    Description = "Raw JSON articles from NewsAPI - temporary storage"
     DataType    = "raw-json"
   })
 }
@@ -62,6 +62,9 @@ resource "aws_s3_bucket_lifecycle_configuration" "raw_articles" {
     id     = "delete-old-raw-articles"
     status = "Enabled"
 
+    # Apply to all objects
+    filter {}
+
     # Delete files older than 7 days
     expiration {
       days = 7
@@ -86,7 +89,7 @@ resource "aws_s3_bucket" "normalized_articles" {
 
   tags = merge(var.tags, {
     Name        = "${var.project_name}-${var.environment}-normalized-articles"
-    Description = "Normalized articles in Parquet format (permanent storage)"
+    Description = "Normalized articles in Parquet format - permanent storage"
     DataType    = "parquet"
   })
 }
@@ -128,6 +131,9 @@ resource "aws_s3_bucket_lifecycle_configuration" "normalized_articles" {
   rule {
     id     = "transition-to-cheaper-storage"
     status = "Enabled"
+
+    # Apply to all objects
+    filter {}
 
     # Move to Infrequent Access after 30 days (50% cost reduction)
     # Athena can still query IA storage
@@ -205,6 +211,9 @@ resource "aws_s3_bucket_lifecycle_configuration" "athena_results" {
   rule {
     id     = "delete-old-query-results"
     status = "Enabled"
+
+    # Apply to all objects
+    filter {}
 
     expiration {
       days = 30

@@ -234,6 +234,8 @@ resource "aws_lambda_function" "api_handler" {
       SQS_QUEUE_URL        = aws_sqs_queue.ingest_queue.url
       S3_BUCKET_NORMALIZED = "${var.project_name}-${var.environment}-normalized-articles"
       S3_BUCKET_ATHENA     = "${var.project_name}-${var.environment}-athena-results"
+      NEWS_API_KEY         = var.news_api_key
+      NEWS_API_BASE_URL    = var.news_api_base_url
       UPSTASH_REDIS_URL    = var.upstash_redis_url
       UPSTASH_REDIS_TOKEN  = var.upstash_redis_token
       REDIS_TTL_DAYS       = "14"
@@ -286,10 +288,9 @@ resource "aws_lambda_function" "worker" {
   memory_size = 1024 # MB - normalization + S3 writes need more memory
   timeout     = 60   # Seconds - NewsAPI calls + processing can take time
   
-  # Reserved concurrency: Limit to 5 concurrent executions
-  # Prevents overwhelming NewsAPI rate limits (100 requests/day)
-  # With 5 concurrent × 100 articles/request = max 500 articles at once
-  reserved_concurrent_executions = 5
+  # Note: Reserved concurrency removed for dev environment to avoid quota issues
+  # In production, set to limit concurrent executions if needed
+  # reserved_concurrent_executions = 5
 
   # Environment variables
   environment {

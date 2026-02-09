@@ -109,11 +109,33 @@ async def process_single_message(message_body: Dict[str, Any]) -> Dict[str, Any]
         source=source
     )
     
-    # Initialize services (singletons reused across invocations)
-    redis = get_redis_client()
-    await redis.connect()
+    # Initialize Redis (optional for local development)
+    redis = None
+    use_redis = os.getenv("UPSTASH_REDIS_URL") and os.getenv("UPSTASH_REDIS_TOKEN")
     
-    s3 = get_s3_client()
+    if use_redis:
+        redis = get_redis_client()
+        await redis.connect()
+        logger.info("redis_enabled", message="Deduplication active")
+    else:
+        logger.warning(
+            "redis_disabled",
+            message="Running without Redis - deduplication disabled. All articles will be processed."
+        )
+    
+    # Initialize S3 (optional for local development)
+    s3 = None
+    use_s3 = os.getenv("S3_BUCKET_RAW") and os.getenv("S3_BUCKET_NORMALIZED")
+    
+    if use_s3:
+        s3 = get_s3_client()
+        logger.info("s3_enabled", message="Article storage active")
+    else:
+        logger.warning(
+            "s3_disabled",
+            message="Running without S3 - articles will be logged but not stored."
+        )
+    
     news_fetcher = NewsFetcher()
     normalizer = ArticleNormalizer()
     
@@ -163,29 +185,35 @@ async def process_single_message(message_body: Dict[str, Any]) -> Dict[str, Any]
             article_hashes.append(article_hash)
         
         # Step 3: Batch-check Redis for existing hashes (deduplication)
-        logger.info("checking_redis_for_duplicates", hash_count=len(article_hashes))
-        
-        exists_list = await redis.batch_check_exists(article_hashes)
-        
-        # Step 4: Filter out duplicate articles
-        # exists_list[i] = True means article[i] already processed
         new_articles = []
         new_hashes = []
         duplicate_count = 0
         
-        for i, (article, hash_val, exists) in enumerate(zip(raw_articles, article_hashes, exists_list)):
-            if exists:
-                # Duplicate - skip this article
-                duplicate_count += 1
-                logger.debug(
-                    "duplicate_article_skipped",
-                    hash=hash_val,
-                    title=article.get("title", "")[:50]
-                )
-            else:
-                # New article - keep for processing
-                new_articles.append(article)
-                new_hashes.append(hash_val)
+        if redis:
+            logger.info("checking_redis_for_duplicates", hash_count=len(article_hashes))
+            
+            exists_list = await redis.batch_check_exists(article_hashes)
+            
+            # Step 4: Filter out duplicate articles
+            # exists_list[i] = True means article[i] already processed
+            for i, (article, hash_val, exists) in enumerate(zip(raw_articles, article_hashes, exists_list)):
+                if exists:
+                    # Duplicate - skip this article
+                    duplicate_count += 1
+                    logger.debug(
+                        "duplicate_article_skipped",
+                        hash=hash_val,
+                        title=article.get("title", "")[:50]
+                    )
+                else:
+                    # New article - keep for processing
+                    new_articles.append(article)
+                    new_hashes.append(hash_val)
+        else:
+            # No Redis - process all articles (no deduplication)
+            logger.info("deduplication_skipped", message="Redis not configured, processing all articles")
+            new_articles = raw_articles
+            new_hashes = article_hashes
         
         new_count = len(new_articles)
         duplicate_percentage = round(duplicate_count / total_fetched * 100, 1) if total_fetched > 0 else 0
@@ -228,36 +256,48 @@ async def process_single_message(message_body: Dict[str, Any]) -> Dict[str, Any]
         )
         
         # Step 6: Store raw articles to S3 (for debugging)
-        logger.info("storing_raw_articles", count=total_fetched)
-        
-        raw_result = await s3.store_raw_articles(
-            articles=raw_articles,  # Store all fetched (including duplicates) for audit
-            query=query,
-            timestamp=start_time
-        )
-        
-        logger.info("raw_articles_stored", **raw_result)
+        if s3:
+            logger.info("storing_raw_articles", count=total_fetched)
+            
+            raw_result = await s3.store_raw_articles(
+                articles=raw_articles,  # Store all fetched (including duplicates) for audit
+                query=query,
+                timestamp=start_time
+            )
+            
+            logger.info("raw_articles_stored", **raw_result)
+        else:
+            logger.info("s3_storage_skipped_raw", count=total_fetched, message="S3 not configured")
         
         # Step 7: Store normalized articles to S3 (Parquet for Athena)
-        logger.info("storing_normalized_articles", count=normalized_count)
-        
-        normalized_result = await s3.store_normalized_articles(
-            articles=normalized_articles,
-            timestamp=start_time
-        )
-        
-        logger.info("normalized_articles_stored", **normalized_result)
+        if s3:
+            logger.info("storing_normalized_articles", count=normalized_count)
+            
+            normalized_result = await s3.store_normalized_articles(
+                articles=normalized_articles,
+                timestamp=start_time
+            )
+            
+            logger.info("normalized_articles_stored", **normalized_result)
+        else:
+            logger.info("s3_storage_skipped_normalized", count=normalized_count, message="S3 not configured")
+            # Log sample articles for debugging
+            if normalized_articles:
+                logger.info("sample_article", article=normalized_articles[0])
         
         # Step 8: Mark new hashes as processed in Redis (prevent future duplicates)
-        logger.info("marking_hashes_processed", count=len(new_hashes))
-        
-        marked_count = await redis.batch_mark_processed(new_hashes)
-        
-        logger.info(
-            "hashes_marked_processed",
-            marked=marked_count,
-            failed=len(new_hashes) - marked_count
-        )
+        if redis and new_hashes:
+            logger.info("marking_hashes_processed", count=len(new_hashes))
+            
+            marked_count = await redis.batch_mark_processed(new_hashes)
+            
+            logger.info(
+                "hashes_marked_processed",
+                marked=marked_count,
+                failed=len(new_hashes) - marked_count
+            )
+        else:
+            logger.info("redis_marking_skipped", message="Redis not configured or no new hashes")
         
         # Step 9: Calculate processing time and return metrics
         end_time = datetime.utcnow()

@@ -39,6 +39,9 @@ import structlog
 # Import API routers
 from app.api.v1 import health, analytics
 
+# Import worker for local development mode
+from app.lambda_worker_handler import process_single_message
+
 # Initialize structured logging
 structlog.configure(
     processors=[
@@ -181,6 +184,9 @@ async def ingest_articles(request: IngestRequest):
     Accepts ingest request, validates, and publishes to SQS for background processing.
     Worker Lambda will handle the actual fetching and processing.
     
+    In LOCAL DEVELOPMENT mode (ENVIRONMENT=development), bypasses SQS and processes
+    articles directly for easy testing without AWS infrastructure.
+    
     Args:
         request: IngestRequest with query, limit, language
     
@@ -211,13 +217,39 @@ async def ingest_articles(request: IngestRequest):
             language=request.language
         )
         
+        # LOCAL DEVELOPMENT MODE: Process directly without SQS
+        environment = os.getenv("ENVIRONMENT", "production")
+        if environment == "development":
+            logger.info("local_development_mode", message="Processing directly, bypassing SQS")
+            
+            # Prepare message payload
+            message_body = {
+                "query": request.query,
+                "limit": request.limit,
+                "language": request.language,
+                "source": "api",
+                "submitted_at": datetime.utcnow().isoformat()
+            }
+            
+            # Process directly (synchronously for local testing)
+            result = await process_single_message(message_body)
+            
+            return IngestResponse(
+                status="completed",
+                message=f"Articles processed successfully. Fetched: {result.get('fetched', 0)}, New: {result.get('new_articles', 0)}, Duplicates: {result.get('duplicates', 0)}",
+                request_id="local-" + datetime.utcnow().strftime("%Y%m%d%H%M%S"),
+                query=request.query,
+                estimated_processing_time_seconds=0  # Already processed
+            )
+        
+        # PRODUCTION MODE: Publish to SQS
         # Get SQS queue URL from environment
         queue_url = os.getenv("SQS_QUEUE_URL")
         if not queue_url:
             logger.error("sqs_queue_url_not_configured")
             raise HTTPException(
                 status_code=500,
-                detail="SQS queue not configured"
+                detail="SQS queue not configured. Set ENVIRONMENT=development for local testing or configure SQS_QUEUE_URL for production."
             )
         
         # Prepare message payload (flexible JSON structure for worker)

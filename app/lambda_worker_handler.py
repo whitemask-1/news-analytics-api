@@ -300,7 +300,7 @@ async def process_single_message(message_body: Dict[str, Any]) -> Dict[str, Any]
             logger.info("redis_marking_skipped", message="Redis not configured or no new hashes")
         
         # Step 9: Calculate processing time and return metrics
-        end_time = datetime.utcnow()
+        end_time = datetime.now()
         processing_time_ms = int((end_time - start_time).total_seconds() * 1000)
         
         result = {

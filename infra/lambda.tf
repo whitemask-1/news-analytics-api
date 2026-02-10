@@ -305,6 +305,7 @@ resource "aws_lambda_function" "worker" {
       UPSTASH_REDIS_URL    = var.upstash_redis_url
       UPSTASH_REDIS_TOKEN  = var.upstash_redis_token
       REDIS_TTL_DAYS       = "14"
+      SQS_QUEUE_URL        = aws_sqs_queue.ingest_queue.url
     }
   }
 

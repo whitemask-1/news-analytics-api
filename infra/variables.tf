@@ -31,43 +31,6 @@ variable "aws_region" {
   # Other options: us-west-2, eu-west-1, etc.
 }
 
-# =============================================================================
-# CONTAINER CONFIGURATION
-# =============================================================================
-# These variables control how your Docker container runs in ECS
-
-variable "container_port" {
-  description = "Port your FastAPI application listens on"
-  type        = number
-  default     = 8000
-  # Must match the EXPOSE port in your Dockerfile
-}
-
-variable "container_cpu" {
-  description = "CPU units for the container (1024 = 1 vCPU)"
-  type        = number
-  default     = 256
-  # Valid Fargate values: 256, 512, 1024, 2048, 4096
-  # 256 = 0.25 vCPU - good for light workloads
-}
-
-variable "container_memory" {
-  description = "Memory in MB for the container"
-  type        = number
-  default     = 512
-  # Must be compatible with CPU:
-  # 256 CPU: 512, 1024, or 2048 MB
-  # 512 CPU: 1024 to 4096 MB
-  # See: https://docs.aws.amazon.com/AmazonECS/latest/developerguide/task-cpu-memory-error.html
-}
-
-variable "desired_count" {
-  description = "Number of container instances to run"
-  type        = number
-  default     = 1
-  # Start with 1 for development
-  # Increase for production (2+ for high availability)
-}
 
 # =============================================================================
 # NETWORKING CONFIGURATION
@@ -101,26 +64,6 @@ variable "log_level" {
   # Options: DEBUG, INFO, WARNING, ERROR, CRITICAL
 }
 
-# =============================================================================
-# COST OPTIMIZATION
-# =============================================================================
-
-variable "enable_nat_gateway" {
-  description = "Enable NAT Gateway for private subnet internet access (costs ~$30/month)"
-  type        = bool
-  default     = false
-  # false = use public subnets (cheaper but less secure)
-  # true = use private subnets with NAT Gateway (more secure but costs money)
-  # For learning/dev: set to false
-}
-
-variable "enable_container_insights" {
-  description = "Enable CloudWatch Container Insights for detailed monitoring (additional cost)"
-  type        = bool
-  default     = false
-  # true = detailed metrics and logs (easier debugging but costs more)
-  # false = basic monitoring only
-}
 
 # =============================================================================
 # LAMBDA & API CONFIGURATION

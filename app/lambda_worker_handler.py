@@ -93,7 +93,7 @@ async def process_single_message(message_body: Dict[str, Any]) -> Dict[str, Any]
     Raises:
         Exception: If any step fails (message will retry or go to DLQ)
     """
-    start_time = datetime.utcnow()
+    start_time = datetime.now()
     
     # Extract parameters from message
     query = message_body.get("query", "")

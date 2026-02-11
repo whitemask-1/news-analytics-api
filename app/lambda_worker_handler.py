@@ -358,7 +358,7 @@ def lambda_handler(event, context):
     """
     logger.info(
         "worker_lambda_invoked",
-        request_id=context.request_id,
+        request_id=context.aws_request_id,
         function_name=context.function_name,
         remaining_time_ms=context.get_remaining_time_in_millis(),
         message_count=len(event.get("Records", []))

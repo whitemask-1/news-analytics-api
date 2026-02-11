@@ -198,9 +198,6 @@ data "aws_iam_policy_document" "lambda_permissions" {
   }
 }
 
-# Get current AWS account ID for IAM resource ARNs
-data "aws_caller_identity" "current" {}
-
 # =============================================================================
 # LAMBDA FUNCTION: API HANDLER
 # =============================================================================
@@ -234,11 +231,13 @@ resource "aws_lambda_function" "api_handler" {
       SQS_QUEUE_URL        = aws_sqs_queue.ingest_queue.url
       S3_BUCKET_NORMALIZED = "${var.project_name}-${var.environment}-normalized-articles"
       S3_BUCKET_ATHENA     = "${var.project_name}-${var.environment}-athena-results"
-      NEWS_API_KEY         = var.news_api_key
       NEWS_API_BASE_URL    = var.news_api_base_url
-      UPSTASH_REDIS_URL    = var.upstash_redis_url
-      UPSTASH_REDIS_TOKEN  = var.upstash_redis_token
       REDIS_TTL_DAYS       = "14"
+      
+      # Secret ARNs - application reads values from Secrets Manager at runtime
+      NEWS_API_KEY_SECRET_ARN         = aws_secretsmanager_secret.news_api_key.arn
+      UPSTASH_REDIS_URL_SECRET_ARN    = aws_secretsmanager_secret.upstash_redis_url.arn
+      UPSTASH_REDIS_TOKEN_SECRET_ARN  = aws_secretsmanager_secret.upstash_redis_token.arn
     }
   }
 
@@ -253,7 +252,10 @@ resource "aws_lambda_function" "api_handler" {
     Description = "API Gateway handler for HTTP requests"
   })
 
-  depends_on = [aws_cloudwatch_log_group.api_lambda_logs]
+  depends_on = [
+    aws_cloudwatch_log_group.api_lambda_logs,
+    null_resource.docker_build_push
+  ]
 }
 
 # CloudWatch log group for API Lambda
@@ -301,11 +303,13 @@ resource "aws_lambda_function" "worker" {
       S3_BUCKET_RAW        = "${var.project_name}-${var.environment}-raw-articles"
       S3_BUCKET_NORMALIZED = "${var.project_name}-${var.environment}-normalized-articles"
       NEWS_API_BASE_URL    = var.news_api_base_url
-      NEWS_API_KEY         = var.news_api_key # TODO: Move to Secrets Manager
-      UPSTASH_REDIS_URL    = var.upstash_redis_url
-      UPSTASH_REDIS_TOKEN  = var.upstash_redis_token
       REDIS_TTL_DAYS       = "14"
       SQS_QUEUE_URL        = aws_sqs_queue.ingest_queue.url
+      
+      # Secret ARNs - application reads values from Secrets Manager at runtime
+      NEWS_API_KEY_SECRET_ARN         = aws_secretsmanager_secret.news_api_key.arn
+      UPSTASH_REDIS_URL_SECRET_ARN    = aws_secretsmanager_secret.upstash_redis_url.arn
+      UPSTASH_REDIS_TOKEN_SECRET_ARN  = aws_secretsmanager_secret.upstash_redis_token.arn
     }
   }
 
@@ -320,7 +324,10 @@ resource "aws_lambda_function" "worker" {
     Description = "Worker Lambda for article ingestion and processing"
   })
 
-  depends_on = [aws_cloudwatch_log_group.worker_lambda_logs]
+  depends_on = [
+    aws_cloudwatch_log_group.worker_lambda_logs,
+    null_resource.docker_build_push
+  ]
 }
 
 # CloudWatch log group for Worker Lambda
@@ -405,7 +412,7 @@ resource "aws_cloudwatch_log_group" "api_gateway_logs" {
   tags = var.tags
 }
 
-# Lambda integration: Connects API Gateway to Lambda API handler
+# Lambda integration: Connects Gateway to Lambda API handler
 resource "aws_apigatewayv2_integration" "lambda" {
   api_id           = aws_apigatewayv2_api.http_api.id
   integration_type = "AWS_PROXY" # Passes full request to Lambda
@@ -437,76 +444,77 @@ resource "aws_lambda_permission" "api_gateway" {
 # =============================================================================
 # EVENTBRIDGE SCHEDULE FOR AUTOMATIC INGESTION
 # =============================================================================
-
+# COMMENTED OUT: Enable after verifying pipeline works end-to-end
+# Uncomment these resources once you've manually tested ingestion successfully
+#
 # EventBridge Scheduler: Triggers worker Lambda every 6 hours
 # Automatically fetches news articles on a schedule
-resource "aws_cloudwatch_event_rule" "scheduled_ingestion" {
-  name                = "${var.project_name}-${var.environment}-scheduled-ingestion"
-  description         = "Trigger article ingestion every 6 hours"
-  schedule_expression = "cron(0 */6 * * ? *)" # Every 6 hours at :00 minutes
-  # Cron format: (minute hour day month day-of-week year)
-  # 0 */6 * * ? * = minute 0, every 6 hours, every day
-
-  tags = merge(var.tags, {
-    Name        = "${var.project_name}-${var.environment}-scheduled-ingestion"
-    Description = "Scheduled article ingestion"
-  })
-}
-
-# EventBridge Target: Sends message to SQS queue with query parameters
-resource "aws_cloudwatch_event_target" "sqs" {
-  rule      = aws_cloudwatch_event_rule.scheduled_ingestion.name
-  target_id = "SendToSQS"
-  arn       = aws_sqs_queue.ingest_queue.arn
-
-  # Message payload: Flexible JSON structure for worker Lambda
-  # Can add more queries by creating additional EventBridge rules
-  input = jsonencode({
-    query    = "artificial intelligence OR machine learning OR AI"
-    limit    = 100
-    language = "en"
-    source   = "scheduled" # Track if message came from schedule vs API
-  })
-}
-
-# Permission: Allow EventBridge to send messages to SQS
-resource "aws_sqs_queue_policy" "eventbridge_to_sqs" {
-  queue_url = aws_sqs_queue.ingest_queue.id
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Sid    = "AllowEventBridgeToSendMessages"
-        Effect = "Allow"
-        Principal = {
-          Service = "events.amazonaws.com"
-        }
-        Action   = "sqs:SendMessage"
-        Resource = aws_sqs_queue.ingest_queue.arn
-        Condition = {
-          ArnEquals = {
-            "aws:SourceArn" = aws_cloudwatch_event_rule.scheduled_ingestion.arn
-          }
-        }
-      }
-    ]
-  })
-}
+#
+# resource "aws_cloudwatch_event_rule" "scheduled_ingestion" {
+#   name                = "${var.project_name}-${var.environment}-scheduled-ingestion"
+#   description         = "Trigger article ingestion every 6 hours"
+#   schedule_expression = "cron(0 */6 * * ? *)" # Every 6 hours at :00 minutes
+#   # Cron format: (minute hour day month day-of-week year)
+#   # 0 */6 * * ? * = minute 0, every 6 hours, every day
+#
+#   tags = merge(var.tags, {
+#     Name        = "${var.project_name}-${var.environment}-scheduled-ingestion"
+#     Description = "Scheduled article ingestion"
+#   })
+# }
+#
+# # EventBridge Target: Sends message to SQS queue with query parameters
+# resource "aws_cloudwatch_event_target" "sqs" {
+#   rule      = aws_cloudwatch_event_rule.scheduled_ingestion.name
+#   target_id = "SendToSQS"
+#   arn       = aws_sqs_queue.ingest_queue.arn
+#
+#   # Message payload: Flexible JSON structure for worker Lambda
+#   # Can add more queries by creating additional EventBridge rules
+#   input = jsonencode({
+#     query    = "artificial intelligence OR machine learning OR AI"
+#     limit    = 100
+#     language = "en"
+#     source   = "scheduled" # Track if message came from schedule vs API
+#   })
+# }
+#
+# # Permission: Allow EventBridge to send messages to SQS
+# resource "aws_sqs_queue_policy" "eventbridge_to_sqs" {
+#   queue_url = aws_sqs_queue.ingest_queue.id
+#
+#   policy = jsonencode({
+#     Version = "2012-10-17"
+#     Statement = [
+#       {
+#         Sid    = "AllowEventBridgeToSendMessages"
+#         Effect = "Allow"
+#         Principal = {
+#           Service = "events.amazonaws.com"
+#         }
+#         Action   = "sqs:SendMessage"
+#         Resource = aws_sqs_queue.ingest_queue.arn
+#         Condition = {
+#           ArnEquals = {
+#             "aws:SourceArn" = aws_cloudwatch_event_rule.scheduled_ingestion.arn
+#           }
+#         }
+#       }
+#     ]
+#   })
+# }
+#
+# TO ENABLE EVENTBRIDGE SCHEDULING:
+# 1. Verify manual ingestion works: curl -X POST $API_URL/api/v1/ingest -H "Content-Type: application/json" -d '{"query":"AI","limit":10}'
+# 2. Check Worker Lambda processes successfully
+# 3. Verify articles stored in S3
+# 4. Uncomment the 3 resources above
+# 5. Run: terraform apply
 
 # =============================================================================
 # OUTPUTS
 # =============================================================================
 
-output "api_gateway_url" {
-  description = "API Gateway endpoint URL"
-  value       = aws_apigatewayv2_stage.default.invoke_url
-}
-
-output "sqs_queue_url" {
-  description = "SQS queue URL for ingestion"
-  value       = aws_sqs_queue.ingest_queue.url
-}
 
 output "lambda_api_arn" {
   description = "API Lambda function ARN"

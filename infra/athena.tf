@@ -268,14 +268,9 @@ output "glue_database_name" {
   value       = aws_glue_catalog_database.news_analytics.name
 }
 
-output "glue_table_name" {
+output "glue_table_name" { 
   description = "Name of the Glue table for normalized articles"
   value       = aws_glue_catalog_table.normalized_articles.name
-}
-
-output "athena_workgroup_name" {
-  description = "Name of the Athena workgroup"
-  value       = aws_athena_workgroup.news_analytics.name
 }
 
 output "athena_workgroup_arn" {

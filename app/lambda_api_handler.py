@@ -407,7 +407,7 @@ def lambda_handler(event, context):
     # Log invocation for debugging
     logger.info(
         "lambda_invocation",
-        request_id=context.request_id,
+        request_id=context.aws_request_id,
         function_name=context.function_name,
         remaining_time_ms=context.get_remaining_time_in_millis(),
         path=event.get("rawPath", "unknown"),
@@ -419,7 +419,7 @@ def lambda_handler(event, context):
     
     logger.info(
         "lambda_response",
-        request_id=context.request_id,
+        request_id=context.aws_request_id,
         status_code=response.get("statusCode", 0)
     )
     

@@ -49,14 +49,6 @@ variable "availability_zones" {
 # =============================================================================
 # These are passed to your FastAPI container
 
-variable "newsapi_key" {
-  description = "API key for NewsAPI service"
-  type        = string
-  sensitive   = true
-  # sensitive = true means Terraform won't display this in logs
-  # You'll provide this when running: terraform apply -var="newsapi_key=your_key"
-}
-
 variable "log_level" {
   description = "Logging level for the application"
   type        = string

@@ -1,9 +1,10 @@
+import os
 import httpx
 from datetime import datetime
 from typing import Optional
 import structlog # type: ignore
 
-from app.core.config import settings # Import app settings
+from app.services.secrets_manager import get_secret_from_env
 
 logger = structlog.get_logger() # Logger for this module
 
@@ -13,8 +14,9 @@ class NewsAPIError(Exception):
 
 class NewsFetcher: #Service to fetch news articles from external APIs, currently supporting NewsAPI.org
     def __init__(self):
-        self.api_key = settings.news_api_key
-        self.base_url = settings.news_api_base_url
+        # Get API key from Secrets Manager (production) or env var (local dev)
+        self.api_key = get_secret_from_env('NEWS_API_KEY_SECRET_ARN', 'NEWS_API_KEY')
+        self.base_url = os.getenv('NEWS_API_BASE_URL', 'https://newsapi.org/v2')
         self.client = httpx.AsyncClient(timeout=10.0)
 
     async def fetch_articles(self, query: str, limit: int =10, language: str = "en") -> dict:

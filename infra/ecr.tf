@@ -128,16 +128,54 @@ resource "aws_ecr_lifecycle_policy" "app" {
 # }
 
 # =============================================================================
+# DOCKER IMAGE BUILD AND PUSH
+# =============================================================================
+
+# Get AWS account ID and region for ECR login
+data "aws_caller_identity" "current" {}
+data "aws_region" "current" {}
+
+# Null resource to build and push Docker image to ECR
+# Triggers whenever app code changes or ECR repository is recreated
+resource "null_resource" "docker_build_push" {
+  # Trigger rebuild when:
+  # 1. ECR repository changes (new repo URL)
+  # 2. Source code changes (detected via timestamp)
+  triggers = {
+    ecr_repo_url    = aws_ecr_repository.app.repository_url
+    source_hash     = timestamp() # Always rebuild on apply
+    # Note: Using timestamp() for now - change to file hash for production
+    # source_hash = filesha256("../Dockerfile")
+  }
+
+  # Build and push commands
+  provisioner "local-exec" {
+    command = <<-EOT
+      set -e
+      
+      echo "🔐 Logging into ECR..."
+      aws ecr get-login-password --region ${data.aws_region.current.name} | \
+        docker login --username AWS --password-stdin ${data.aws_caller_identity.current.account_id}.dkr.ecr.${data.aws_region.current.name}.amazonaws.com
+      
+      echo "🔨 Building Docker image..."
+      docker build --platform linux/amd64 --provenance=false --sbom=false -t ${aws_ecr_repository.app.repository_url}:latest ../
+      
+      echo "🚀 Pushing image to ECR..."
+      docker push ${aws_ecr_repository.app.repository_url}:latest
+      
+      echo "✅ Docker image successfully pushed!"
+    EOT
+    
+    working_dir = "${path.module}"
+  }
+
+  depends_on = [aws_ecr_repository.app]
+}
+
+# =============================================================================
 # OUTPUTS
 # =============================================================================
 # Output values you'll need to reference later
-
-output "ecr_repository_url" {
-  description = "URL of the ECR repository - use this to push images"
-  value       = aws_ecr_repository.app.repository_url
-  # Example output: "123456789012.dkr.ecr.us-east-1.amazonaws.com/news-analytics-dev"
-  # You'll use this when running: docker push <this_url>:latest
-}
 
 output "ecr_repository_arn" {
   description = "ARN of the ECR repository"

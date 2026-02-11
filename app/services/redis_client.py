@@ -24,10 +24,12 @@ Architecture Decision:
 
 import os
 import json
-from typing import List, Dict, Optional, Set
+from typing import List, Dict, Optional, Set, Any
 from datetime import timedelta
 import httpx
 import structlog
+
+from app.services.secrets_manager import get_secret_from_env
 
 # Initialize structured logger
 logger = structlog.get_logger(__name__)
@@ -67,21 +69,39 @@ class RedisDeduplication:
         Initialize Redis deduplication client.
         
         Args:
-            redis_url: Upstash Redis REST API URL (defaults to env UPSTASH_REDIS_URL)
-            redis_token: Upstash authentication token (defaults to env UPSTASH_REDIS_TOKEN)
+            redis_url: Upstash Redis REST API URL (defaults to Secrets Manager or env)
+            redis_token: Upstash authentication token (defaults to Secrets Manager or env)
             ttl_days: Number of days to keep article hashes (default: 14)
                      After TTL expires, article can be re-ingested for updates
         
         Raises:
             ValueError: If redis_url or redis_token not provided and not in environment
         """
-        self.redis_url = redis_url or os.getenv("UPSTASH_REDIS_URL")
-        self.redis_token = redis_token or os.getenv("UPSTASH_REDIS_TOKEN")
+        # Get credentials from Secrets Manager (production) or env vars (local dev)
+        # Allow None if not provided (caller should check before using)
+        try:
+            self.redis_url = redis_url or get_secret_from_env(
+                'UPSTASH_REDIS_URL_SECRET_ARN', 
+                'UPSTASH_REDIS_URL'
+            )
+            self.redis_token = redis_token or get_secret_from_env(
+                'UPSTASH_REDIS_TOKEN_SECRET_ARN', 
+                'UPSTASH_REDIS_TOKEN'
+            )
+        except ValueError as e:
+            logger.warning(
+                "redis_credentials_not_configured",
+                error=str(e),
+                message="Redis deduplication will not be available"
+            )
+            self.redis_url = None
+            self.redis_token = None
         
+        # Only raise error if explicitly trying to use Redis but credentials missing
         if not self.redis_url or not self.redis_token:
-            raise ValueError(
-                "Redis credentials required. Set UPSTASH_REDIS_URL and UPSTASH_REDIS_TOKEN "
-                "environment variables or pass to constructor."
+            logger.info(
+                "redis_disabled",
+                message="Redis credentials not found - deduplication will be skipped"
             )
         
         # Calculate TTL in seconds
@@ -93,8 +113,18 @@ class RedisDeduplication:
         logger.info(
             "redis_client_initialized",
             ttl_days=ttl_days,
-            ttl_seconds=self.ttl_seconds
+            ttl_seconds=self.ttl_seconds,
+            redis_available=self.is_available()
         )
+    
+    def is_available(self) -> bool:
+        """
+        Check if Redis is configured and available for use.
+        
+        Returns:
+            True if Redis credentials are configured, False otherwise
+        """
+        return bool(self.redis_url and self.redis_token)
     
     async def connect(self) -> None:
         """
@@ -104,6 +134,9 @@ class RedisDeduplication:
         Safe to call multiple times (idempotent).
         """
         if self.client is None:
+            if not self.redis_url or not self.redis_token:
+                raise ValueError("Redis URL and token must be set before connecting")
+            
             self.client = httpx.AsyncClient(
                 base_url=self.redis_url,
                 headers={
@@ -125,7 +158,7 @@ class RedisDeduplication:
             self.client = None
             logger.info("redis_client_closed")
     
-    async def _execute_command(self, command: List) -> any:
+    async def _execute_command(self, command: List[str]) -> Any:
         """
         Execute a Redis command via Upstash REST API.
         
@@ -145,6 +178,8 @@ class RedisDeduplication:
         """
         if not self.client:
             await self.connect()
+        
+        assert self.client is not None, "Client should be initialized after connect()"
         
         try:
             # Upstash REST API expects array of commands for pipeline
@@ -236,6 +271,8 @@ class RedisDeduplication:
             # Execute all commands in one request
             if not self.client:
                 await self.connect()
+            
+            assert self.client is not None, "Client should be initialized after connect()"
             
             response = await self.client.post("/pipeline", json=commands)
             response.raise_for_status()
@@ -345,6 +382,8 @@ class RedisDeduplication:
             if not self.client:
                 await self.connect()
             
+            assert self.client is not None, "Client should be initialized after connect()"
+            
             response = await self.client.post("/pipeline", json=commands)
             response.raise_for_status()
             results = response.json()
@@ -369,7 +408,7 @@ class RedisDeduplication:
             )
             return 0
     
-    async def get_stats(self) -> Dict[str, any]:
+    async def get_stats(self) -> Dict[str, Any]:
         """
         Get Redis statistics for monitoring.
         

@@ -12,7 +12,7 @@ class Settings(BaseSettings): # App config settings loaded from environment vari
     api_version: str = "v1"
 
     #External APIs
-    news_api_key: str
+    news_api_key: Optional[str] = None
     news_api_base_url: str = "https://newsapi.org/v2"
     guardian_api_key: Optional[str] = None
     max_articles_per_request: int = 100
